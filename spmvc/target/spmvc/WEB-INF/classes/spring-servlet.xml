@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans
+	xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:mvc="http://www.springframework.org/schema/mvc" 
+	xmlns:util="http://www.springframework.org/schema/util" 
+	xmlns:tx="http://www.springframework.org/schema/tx" 
+	xmlns:aop="http://www.springframework.org/schema/aop" 
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+	 http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-3.0.xsd
+	 http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-3.0.xsd
+	 http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+	 http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
+	 http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd
+	">
+	
+	<!-- 方法1 -->	
+	<context:component-scan base-package="com.zl.*">
+		<!-- <context:include-filter type="regex" expression=".dao.*"/> -->
+		<context:include-filter type="regex" expression=".service.*"/>
+		<context:include-filter type="regex" expression=".web.*"/>
+		<!--<context:exclude-filter type="regex" expression=".service.*"/>-->
+	</context:component-scan>	
+	<!-- 方法2  还可以单独配置某一个层级的包  -->
+	<!-- <context:component-scan base-package="com.zl.service" /> -->
+	<!-- <context:component-scan base-package="com.zling.web"></context:component-scan> -->
+	
+	<!-- 
+	如果配置：<mvc:annotation-driven /> 
+	会自动注册DefaultAnnotationHandlerMapping与AnnotationMethodHandlerAdapter 
+	两个bean,是spring MVC为@Controllers分发请求并正确调用controller方法所必须的。
+	当然即使配置了，也可以独立注册DefaultAnnotationHandlerMapping与AnnotationMethodHandlerAdapter
+	-->
+	<mvc:annotation-driven/>
+	<bean class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">  
+	    <property name="messageConverters">  
+	        <util:list id="beanList">  
+	            <ref bean="mappingJacksonHttpMessageConverter"/>  
+	        </util:list>  
+	    </property>  
+	</bean>
+	<!-- HandlerAdapter适配器在调用方法时需要进行参数和返回值类型匹配适当的 数据类型转换 -->
+	<bean id="mappingJacksonHttpMessageConverter" class="org.springframework.http.converter.json.MappingJacksonHttpMessageConverter">  
+	    <property name="supportedMediaTypes">  
+	        <list>  
+	            <value>text/html;charset=UTF-8</value>  
+	        </list>  
+	    </property>  
+	</bean>
+	<!-- 
+		controller方法的返回如果是：return new ModelAndView("/path/test","message",message); 
+		那么response响应的转发查找路径是：.../WEB-INF/jsp/path/test.jsp
+	-->
+	<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver" p:prefix="/WEB-INF/jsp/" p:suffix=".jsp">
+		  <!-- 也可以配置为子元素
+		  <property name="prefix" value="/WEB-INF/jsp/"/>  
+          <property name="suffix" value=".jsp"/>
+	       -->
+	      <!-- 如果使用jstl的话，配置下面的属性 -->
+	      <property name="viewClass" value="org.springframework.web.servlet.view.JstlView"  />
+	</bean>
+	
+	<!-- <bean class="org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping"/> -->
+    <!-- <bean name="/simple.html /simpleSimon.html"  class="com.zl.web.SimpleController"></bean> -->
+	<!-- com.zl.web.SimpleController必须实现接口 Controller 或继承 extends AbstractController-->
+	
+	<!-- 
+	对静态资源文件的访问  方案一 （二选一）
+	<mvc:default-servlet-handler/>  
+    -->  
+    <!-- 对静态资源文件的访问  方案二 （二选一）-->
+    <!-- 
+    <mvc:resources mapping="/images/**" location="/images/" cache-period="31556926"/>  
+    <mvc:resources mapping="/js/**" location="/js/" cache-period="31556926"/>  
+    <mvc:resources mapping="/css/**" location="/css/" cache-period="31556926"/>
+    -->  
+</beans>

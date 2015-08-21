@@ -1,0 +1,203 @@
+基于Spring MVC的Web应用开发(五) - Redirect
+www.MyException.Cn   发布于：2012-07-28 12:25:13   浏览：450次 0
+
+基于Spring MVC的Web应用开发(5) - Redirect
+本文介绍Spring MVC中的重定向（Redirect），先回顾一下在JSP中，实现页面跳转的几种方式：
+RequestDispatcher.forward()：是在服务端起作用，当使用forward()时，Servlet引擎传递
+http请求从当前的servlet或者jsp到另外一个servlet，jsp或者普通的html文件，即你的表单（form）
+提交至a.jsp，在a.jsp中用到了forward()重定向到b.jsp，此时form提交的所有信息在b.jsp都
+可以获得，参数自动传递，但forward()无法重定向至有frame的jsp文件，可以重定向到有frame
+的html文件，同时forward()无法带参数传递，比如servlet?name=**，但可以在程序内通过
+response.setAttribute("name",name)来将参数传至下一个页面。另外，重定向后浏览器地址栏的
+URL不变，且通常在servlet中使用，不在jsp中使用。
+response.sendRedirect()：时在用户的浏览器端工作，sendRedirect()可以带参数传递，比
+如servlet?name=**传至下一个页面，同时它可以重定向至不同的主机，sendRedirect()可以重定
+向有frame的jsp文件。重定向后在浏览器地址栏上会出现重定向页面的URL。另外，由于response是
+jsp页面中的隐含对象，故在jsp页面中可以用response.sendRedirect()直接实现重定位。我们在
+讲第三点之前，先比较一下头两点，比较：(1) Dispatcher.forward()是容器中的控制权的转向，
+在客户端浏览器地址栏中不会显示出转向后的地址；(2) response.sendRedirect()则是完全的跳
+转，浏览器将会得到跳转的地址，并重新发送请求链接可，这样，从浏览器的地址栏中可以看到跳转
+后的链接地址。前者更加高效，再跑题一点，在有些情况下，比如，需要跳转到到一个其它服务器上
+的资源，则必须使用HttpServletResponse.sendRequest()方法。
+<jsp:forward page=""/>：这个jsp标签的底层部分是由RequestDispatcher来实现的，因此它带有
+RequestDispatcher.forward()方法的所有特性。要注意，它不能改变浏览器地址，刷新的话会导致
+重复提交。
+在Spring MVC中 ，跳转其实和Controller中的return方法紧密联系在一起，编写一个新的Controller，
+叫RedirectController：
+package org.springframework.samples.mvc.redirect;
+
+import org.joda.time.LocalDate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
+
+@Controller
+@RequestMapping("/redirect")
+public class RedirectController {
+	
+	private final ConversionService conversionService;
+
+	@Autowired
+	public RedirectController(ConversionService conversionService) {
+		this.conversionService = conversionService;
+	}
+
+	@RequestMapping(value="/uriTemplate", method=RequestMethod.GET)
+	public String uriTemplate(RedirectAttributes redirectAttrs) {
+		redirectAttrs.addAttribute("account", "a123");  // Used as URI template variable
+		redirectAttrs.addAttribute("date", new LocalDate(2011, 12, 31));  // Appended as a query parameter
+		return "redirect:/redirect/{account}";
+	}
+
+	@RequestMapping(value="/uriComponentsBuilder", method=RequestMethod.GET)
+	public String uriComponentsBuilder() {
+		String date = this.conversionService.convert(new LocalDate(2011, 12, 31), String.class);
+		UriComponents redirectUri = UriComponentsBuilder.fromPath("/redirect/{account}").queryParam("date", date)
+				.build().expand("a123").encode();
+		return "redirect:" + redirectUri.toUriString();
+	}
+
+	@RequestMapping(value="/{account}", method=RequestMethod.GET)
+	public String show(@PathVariable String account, @RequestParam(required=false) LocalDate date) {
+		return "redirect/redirectResults";
+	}
+
+}
+先看看show这个方法：
+	@RequestMapping(value="/{account}", method=RequestMethod.GET)
+	public String show(@PathVariable String account, @RequestParam(required=false) LocalDate date) {
+		return "redirect/redirectResults";
+	}
+注解好像有点多，简单解释一下每个注解代表什么含义，具体详细用法等后面讲到Spring MVC的Convert
+部分再展开。在@RequestMapping注解中有个/{account}的url模式，在方法中也有一个参数叫accout，
+它带有@PathVariable注解，即当访问http://localhost:8080/web/redirect/1时，account变量会自
+动获取到1这个值（当然不限数字，只要是字符串即可），从PathVariable也可以猜到它是解析url路径的
+变量。再看@RequestParam注解，它是解析请求的参数的，如访问
+http://localhost:8080/web/redirect/1?date=2012/03/26时，show方法中的date参数会自动得到
+2012/03/26这个值并将其转换成LocalDate类。
+最后看return，show方法返回String，并且没有加上@ResponseBody，返回的View就是该字符串对应的
+View名字，我们已经有一个默认的ViewResolver，因此这个@RequestMapping最终将返回到
+webapp/WEB-INF/views/redirect/redirectResults.jsp：
+<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@ taglib uri="http://www.springframework.org/tags" prefix="spring" %>
+<%@ page session="false" %>
+<html>
+<head>
+	<title>Redirect Results</title>
+	<link href="<c:url value="/resources/form.css" />" rel="stylesheet"  type="text/css" />		
+</head>
+<body>
+<div class="success">
+	<h3>Path variable 'account': ${account}</h3>
+	<h3>Query param 'date': ${param.date}</h3>
+</div>
+</body>
+</html>
+此jsp取得response中的account值（类似response.setAttribute(name,value)中设置的值），和url
+参数传过来的变量date（注意${param.date}中的param是jsp标准中定义的8个隐含对象（是8个吧？））
+并显示在页面。
+下面马上看到的RedirectController中另外两个方法将会展示如何跳转到上面的show方法的URL，先看：
+	@RequestMapping(value="/uriTemplate", method=RequestMethod.GET)
+	public String uriTemplate(RedirectAttributes redirectAttrs) {
+		redirectAttrs.addAttribute("account", "a123");  // Used as URI template variable
+		redirectAttrs.addAttribute("date", new LocalDate(2011, 12, 31));  // Appended as a query parameter
+		return "redirect:/redirect/{account}";
+	}
+出现了一个新类RedirectAttributes，方法中给它添加了两个属性，添加的属性可以在跳转后的页面中
+获取到。最后该方法返回"redirect:/redirect/{account}"，一般理解的跳转肯定是跳转到某个url，
+SpringMVC中也不例外，
+它将跳转到http://localhost:8080/web/redirect/{account}，而此URL最终将返回到一个JSP页面上。
+看看浏览器效果，在浏览器访问 http://localhost:8080/web/redirect/uriTemplate，短暂的等待后，
+浏览器的地址栏将变成：
+http://localhost:8080/web/redirect/a123?date=12%2F31%2F11
+提个问题，date=12%2F31%2F11是怎么回事？
+看下一个方法：
+	@RequestMapping(value="/uriComponentsBuilder", method=RequestMethod.GET)
+	public String uriComponentsBuilder() {
+		String date = this.conversionService.convert(new LocalDate(2011, 12, 31), String.class);
+		UriComponents redirectUri = UriComponentsBuilder.fromPath("/redirect/{account}").queryParam("date", date)
+				.build().expand("a123").encode();
+		return "redirect:" + redirectUri.toUriString();
+	}
+该方法只是前一个方法的变种。
+访问http://localhost:8080/web/redirect/uriComponentsBuilder，
+短暂的等待后（应该非常短暂以至于你感觉不到），浏览器地址栏变成：
+http://localhost:8080/web/redirect/a123?date=12/31/11
+效果一模一样（其实还是有点不一样，因为这个没有出现怪异的"%2F"了），打印redirectUri出来看看：
+/redirect/a123?date=12/31/11
+那么最终return语句就是
+return "redirect:/redirect/a123?date=12/31/11";
+UriComponents是一个工具类，帮助我们生成URL，比如在本例中，通过UriComponentsBuilder这个类，
+有url为"/redirect/{account}"，传递的参数为date，并且进行转码（encode），
+结果返回的的URL就是"/redirect/a123?date=12/31/11"。（可以试着不加encode()方法看看效果）
+这个结果也说明Spring MVC中的redirect可以带参数。
+ 
+［本附录可不看，翻译也很渣］
+附录Spring Reference Documentation中16.5.3 Redirection to views翻译
+ 
+16.5.3 重定向(redirect)到视图(view)
+前文提及，controller(控制器)返回一个view(视图)名，view resolver（视图解析器）解析这个特
+定的view。对于view technologies（视图技术？），象JSP（JSP由servlet或者JSP引擎解析），
+Spring MVC中的内部解决方案是将InternalResourceViewResolver和InternalResourceView组合起
+来使用，这种组合采用一个内部定向（forward）或者通过Servlet自身API提供的
+RequestDispatcher.forward(..)方法或者RequestDispatcher.include()方法。对于其它的
+view technologies，如Velocity，XSLT，等等，view本身就将内容直接写到response的输出流里了。
+有时我们想要在view渲染前就将HTTP重定向回客户端，这是有可能的，比如，当使用POST方式提交数据
+到一个Controller时，response实际上是另外一个controller的委托（比如一个成功的form表单提交）。
+在这种情况下，一个正常的内部定向意味着其它controller将也会看到相同的POST数据，如果将它和
+其它期望的数据弄混了，这就是一个潜在的问题了。在显示结果之前进行重定向的另一个原因就是排除
+用户多次提交表单数据的可能性。在这种场景下，浏览器会先发送一个初始POST；然后接受一个
+response来重定向到一个不同的URL；最后浏览器的地址栏会体现在重定向response中的GET方式的URL。
+因此，从浏览器的角度看，当前页显示的不是POST而是GET的结果。最后一个影响就是用户不能通过
+“意外地”点击了刷新，从而重复POST提交了相同的数据。刷新会到一个GET的结果页面，而不是重复以
+POST方式提交数据。（说实话，这一段我没怎么看懂 =;=）
+16.5.3.1 RedirectView
+对controller来说，作为controller的response的结果来重定向的一个方式就是创建并返回一个
+Spring的RedirectView的实例。在这种情况下，DispatcherServlet不使用通用的view解决机制。
+这是由于依然重定向的view已经有了，DispatcherServlet只要简单得让这个view工作即可。
+RedirectView通过HttpServletResponse.sendRedirect()实现，它作为一个HTTP重定向返回给客
+户端浏览器。默认所有得model attribute会以URI模板变量得形式暴露在重定向的URL里。保留的
+attribute中那些primitive types或者collections/arrays的primitive types会自动地以查询
+参数的形式添加上。
+如果一个model实例是为重定向特殊准备的，以查询参数添加primitive type attributes就是我们
+想要的结果。然而，在加上了注解的controller中，model可能包含额外的作为渲染目的的
+（rendering purposes）attribute（比如：drop-down field values）。为了避免这样的
+attribute出现在URL里，一个带有注解的controller可以声明一个RedirectAttributes类型的参数，
+并使用它指定明确的attribute来让RedirectView获取到。如果controller方法重定向了，
+RedirectAttributes的内容就可以使用了，否则使用的是model的内容。
+注意来自当前请求的URI模板变量，在重定向到一个URL时，是自动可获得的，不需要额外添加，也不
+需要通过Model或者RedirectAttributes来添加，举个例子：
+@RequestMapping(value = "/files/{path}", method = RequestMethod.POST)
+public String upload(...) {
+    // ...
+    return "redirect:files/{path}";
+}
+如果你使用RedirectView，这个view是被controller自身创建的，推荐你配置重定向URL，让其注入
+到controller，从而it is not baked into the controller，而是在上下文中带着view名配置的。
+下一节我们继续讨论。
+16.5.3.2 redirect:前缀
+因为controller本身可以创建RedirectView，所以我们使用RedirectView可以工作得很好，不可避
+免的一个事实是controller得知道这个Redirect，这让事情紧紧得耦合在一起了，controller不应
+该知道response是如何处理的，通常它应该只关心注入进来的view名。
+这个特殊的redirect:前缀可以达到这个目的，如果一个view名以前缀名redirect:方式返回，
+UrlBasedViewrResolver（以及它的子类）会识别出来这是一个特殊的indication，这个indication
+ 是一个redirect需要的。剩下的view名将会作为重定向的URL来处理。
+如果controller返回的是RedirectView，实际的效果是一样的，但现在controller自身可以操作逻
+辑意义上的view名，一个逻辑意义上的view名，如redirect:/myapp/some/resources会重定向关联
+到当前Servlet上下文，同时这样的redirect:http://myhost.com/some/arbitrary/path的view名
+会重定向到一个绝对路径的URL上。
+16.5.3.3 forward:前缀
+也可以给view名使用一个特殊的forward:前缀，它会被UrlBasedViewResolver及其子类解析。
+它给view名创建一个InternalResourceView（实际使用RequestDispatcher.forward()），剩下
+的view名就是一个URL，然而，这个前缀对于InternalResourceViewResolver和InternalResourceView
+(比如JSP)是不可用的。但是这个前缀在你使用其它view technology时还是可以提供一些帮助的。但是
+仍然要强制forward到一个能被Servlet/JSP引擎处理的资源。（注意你也可以将多个view解析器串起来，
+替代）。（说实话，这段没怎么明白 译者）
+16.5.4 ContentNegotiatingViewResolver （跟我们讲的关联不大，略去 译者）
